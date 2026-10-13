@@ -91,6 +91,9 @@ class Paper:
             tldr = self._generate_tldr_with_llm(openai_client,llm_params)
             if not tldr or not tldr.strip():
                 raise ValueError("LLM returned an empty summary")
+            lang = llm_params.get("language", "English")
+            if ("中文" in lang or "chinese" in lang.casefold()) and not re.search(r"[\u4e00-\u9fff]", tldr):
+                raise ValueError("LLM returned a summary without Chinese characters")
             self.tldr = tldr
             self.tldr_failed = False
             return tldr

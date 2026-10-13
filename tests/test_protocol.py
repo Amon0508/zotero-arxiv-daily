@@ -67,6 +67,14 @@ def test_chinese_tldr_failure_is_visible(llm_params):
     assert paper.abstract in result
 
 
+def test_english_response_when_chinese_requested_is_marked_failed(llm_params):
+    llm_params["language"] = "简体中文"
+    paper = make_sample_paper()
+    result = paper.generate_tldr(make_stub_openai_client(), llm_params)
+    assert paper.tldr_failed
+    assert result.startswith("中文摘要生成失败")
+
+
 def test_tldr_truncates_long_prompt(llm_params):
     client = make_stub_openai_client()
     paper = make_sample_paper(full_text="word " * 10000)
