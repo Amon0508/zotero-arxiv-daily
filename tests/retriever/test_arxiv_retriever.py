@@ -18,6 +18,30 @@ def _raise_runtime_error() -> None:
     raise RuntimeError("boom")
 
 
+def test_rolling_query_uses_date_window_and_primary_category(config, monkeypatch):
+    config.source.arxiv.lookback_days = 7
+    searches = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            assert kwargs["delay_seconds"] >= 3
+
+        def results(self, search):
+            searches.append(search)
+            return iter([
+                SimpleNamespace(primary_category="cs.AI"),
+                SimpleNamespace(primary_category="cs.MA"),
+            ])
+
+    monkeypatch.setattr(arxiv_retriever.arxiv, "Client", FakeClient)
+    papers = ArxivRetriever(config)._retrieve_raw_papers()
+
+    assert len(papers) == 1
+    assert "submittedDate:[" in searches[0].query
+    assert "cat:cs.AI OR cat:cs.CV" in searches[0].query
+    assert searches[0].max_results is None
+
+
 def test_arxiv_retriever(config, mock_feedparser, monkeypatch):
     monkeypatch.setattr("zotero_arxiv_daily.retriever.base.sleep", lambda _: None)
 

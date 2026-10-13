@@ -4,7 +4,7 @@ from arxiv import Result as ArxivResult
 from ..protocol import Paper
 from ..utils import extract_markdown_from_pdf, extract_tex_code_from_tar
 import calendar
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import multiprocessing
 import os
 from queue import Empty
@@ -218,6 +218,10 @@ class ArxivRetriever(BaseRetriever):
             raise ValueError("category must be specified for arxiv.")
 
     def _retrieve_raw_papers(self) -> list[ArxivResult]:
+        lookback_days = self.config.source.arxiv.get("lookback_days")
+        if lookback_days is not None:
+            return self._retrieve_recent_papers(lookback_days)
+
         query = '+'.join(self.config.source.arxiv.category)
         include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
         rss_url = f"https://rss.arxiv.org/atom/{query}"
@@ -279,6 +283,39 @@ class ArxivRetriever(BaseRetriever):
             raw_papers.append(_entry_to_arxiv_result(entry))
 
         return raw_papers
+
+    def _retrieve_recent_papers(self, lookback_days: int) -> list[ArxivResult]:
+        """Search a rolling UTC window so late announcements survive an early run."""
+        if not isinstance(lookback_days, int) or lookback_days < 1:
+            raise ValueError("source.arxiv.lookback_days must be a positive integer")
+
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=lookback_days)
+        categories = self.config.source.arxiv.category
+        category_query = " OR ".join(f"cat:{category}" for category in categories)
+        date_query = (
+            f"submittedDate:[{start:%Y%m%d%H%M} TO {now:%Y%m%d%H%M}]"
+        )
+        search = arxiv.Search(
+            query=f"({category_query}) AND {date_query}",
+            max_results=None,
+            sort_by=arxiv.SortCriterion.SubmittedDate,
+            sort_order=arxiv.SortOrder.Descending,
+        )
+        client = arxiv.Client(page_size=200, delay_seconds=3.0, num_retries=3)
+        include_cross_list = self.config.source.arxiv.get("include_cross_list", False)
+        category_set = set(categories)
+        results = [
+            paper for paper in client.results(search)
+            if include_cross_list or paper.primary_category in category_set
+        ]
+        logger.info(
+            f"arXiv rolling query {start:%Y-%m-%d %H:%M} to {now:%Y-%m-%d %H:%M} UTC: "
+            f"{len(results)} matching papers"
+        )
+        if self.config.executor.debug:
+            results = results[:10]
+        return results
 
     def convert_to_paper(self, raw_paper: ArxivResult) -> Paper:
         title = raw_paper.title

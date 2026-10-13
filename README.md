@@ -201,6 +201,8 @@ For broader coverage, set `source.arxiv.include_cross_list: true` in `CUSTOM_CON
 
 `llm.language: 简体中文` requests Chinese TL;DRs. If the LLM API fails, the email now marks the failure and shows the original English abstract. A `402 Insufficient Balance` response requires adding balance to the configured API provider or replacing its API key/base URL with a working provider; changing the language setting cannot fix a rejected API request.
 
+The daily workflow is scheduled for 00:00 Singapore time (16:00 UTC). GitHub may start scheduled jobs later than the configured time. To avoid a gap when arXiv announces papers after a run, the daily job searches a rolling seven-day window and restores the IDs of previously considered arXiv papers from the newest Actions cache. It ranks only unseen candidates and emails at most five. The state is saved only after successful email delivery; a failed run can be retried without dropping its candidates. The first run after enabling this mode may include papers from an earlier email, because the old workflow kept no delivery state. A cache reset can likewise cause a small amount of repeat coverage.
+
 ## 📌 Limitations
 - The recommendation algorithm is very simple, it may not accurately reflect your interest. Welcome better ideas for improving the algorithm!
 - High `MAX_PAPER_NUM` can lead the execution time exceed the limitation of Github Action runner (6h per execution for public repo, and 2000 mins per month for private repo). Commonly, the quota given to public repo is definitely enough for individual use. If you have special requirements, you can deploy the workflow in your own server, or use a self-hosted Github Action runner, or pay for the exceeded execution time.

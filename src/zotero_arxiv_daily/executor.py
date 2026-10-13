@@ -9,6 +9,7 @@ from datetime import datetime
 from .reranker import get_reranker_cls
 from .construct_email import render_email
 from .priority import prioritize_papers
+from .delivery_state import DeliveryState
 from .utils import send_email
 from openai import OpenAI
 from tqdm import tqdm
@@ -92,10 +93,12 @@ class Executor:
 
     
     def run(self):
+        delivery_state = DeliveryState(self.config.executor.get("delivery_state_path"))
         corpus = self.fetch_zotero_corpus()
         corpus = self.filter_corpus(corpus)
         if len(corpus) == 0:
             logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
+            delivery_state.save()
             return
         all_papers = []
         for source, retriever in self.retrievers.items():
@@ -107,10 +110,12 @@ class Executor:
             logger.info(f"Retrieved {len(papers)} {source} papers")
             all_papers.extend(papers)
         logger.info(f"Total {len(all_papers)} papers retrieved from all sources")
+        candidates = [paper for paper in all_papers if not delivery_state.is_seen(paper)]
+        logger.info(f"{len(candidates)} papers have not appeared in an earlier daily candidate batch")
         reranked_papers = []
-        if len(all_papers) > 0:
+        if len(candidates) > 0:
             logger.info("Reranking papers...")
-            reranked_papers = self.reranker.rerank(all_papers, corpus)
+            reranked_papers = self.reranker.rerank(candidates, corpus)
             reranked_papers = prioritize_papers(reranked_papers, self.config.executor.priority)
             reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
             logger.info("Generating TLDR and affiliations...")
@@ -122,8 +127,11 @@ class Executor:
                 p.generate_affiliations(self.openai_client, self.config.llm)
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
+            delivery_state.save()
             return
         logger.info("Sending email...")
         email_content = render_email(reranked_papers)
         send_email(self.config, email_content)
         logger.info("Email sent successfully")
+        delivery_state.mark_seen(all_papers)
+        delivery_state.save()

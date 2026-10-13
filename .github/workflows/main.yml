@@ -2,7 +2,11 @@ name: Send emails daily
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 22 * * *'
+    - cron: '0 16 * * *' # 00:00 Asia/Singapore (UTC+8)
+
+concurrency:
+  group: daily-email
+  cancel-in-progress: false
 
 jobs:
   calculate-and-send:
@@ -10,9 +14,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Restore delivered candidate IDs
+        uses: actions/cache/restore@v4
         with:
-          repository: ${{ vars.REPOSITORY }}
-          ref: ${{ vars.REF }}
+          path: .daily-state/sent_arxiv_ids.json
+          key: daily-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: daily-state-
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v7
@@ -31,4 +39,10 @@ jobs:
           printf "%b\n" "$CUSTOM_CONFIG" > config/custom.yaml
           echo "Use custom config: "
           cat config/custom.yaml
-          uv run src/zotero_arxiv_daily/main.py
+          uv run src/zotero_arxiv_daily/main.py source.arxiv.lookback_days=7 source.arxiv.include_cross_list=true executor.max_paper_num=5 executor.delivery_state_path=.daily-state/sent_arxiv_ids.json
+
+      - name: Save delivered candidate IDs
+        uses: actions/cache/save@v4
+        with:
+          path: .daily-state/sent_arxiv_ids.json
+          key: daily-state-${{ github.run_id }}-${{ github.run_attempt }}
