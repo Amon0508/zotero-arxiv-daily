@@ -51,6 +51,22 @@ def test_tldr_falls_back_to_abstract_on_error(llm_params):
     assert result == paper.abstract
 
 
+def test_chinese_tldr_failure_is_visible(llm_params):
+    from types import SimpleNamespace
+
+    llm_params["language"] = "简体中文"
+    paper = make_sample_paper()
+    broken_client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(create=lambda **kw: (_ for _ in ()).throw(RuntimeError("402 Insufficient Balance")))
+        )
+    )
+    result = paper.generate_tldr(broken_client, llm_params)
+    assert paper.tldr_failed
+    assert result.startswith("中文摘要生成失败")
+    assert paper.abstract in result
+
+
 def test_tldr_truncates_long_prompt(llm_params):
     client = make_stub_openai_client()
     paper = make_sample_paper(full_text="word " * 10000)

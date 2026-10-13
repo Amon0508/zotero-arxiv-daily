@@ -61,6 +61,25 @@ def test_arxiv_retriever(config, mock_feedparser, monkeypatch):
 
     assert len(papers) == len(new_entries)
     assert set(p.title for p in papers) == set(e.title for e in new_entries)
+    assert all(p.full_text is None for p in papers)
+
+
+def test_full_text_is_loaded_only_for_selected_paper(config, monkeypatch):
+    retriever = ArxivRetriever(config)
+    raw = SimpleNamespace(
+        title="Selected paper",
+        authors=[SimpleNamespace(name="Author")],
+        summary="Abstract",
+        pdf_url="https://arxiv.org/pdf/2609.33150",
+        entry_id="https://arxiv.org/abs/2609.33150",
+        source_url=lambda: "https://arxiv.org/src/2609.33150",
+    )
+    paper = retriever.convert_to_paper(raw)
+    calls = []
+    monkeypatch.setattr(arxiv_retriever, "extract_text_from_tar", lambda result: calls.append(result) or "Full text")
+    retriever.populate_full_text(paper)
+    assert calls == [raw]
+    assert paper.full_text == "Full text"
 
 
 def test_run_with_hard_timeout_returns_value():

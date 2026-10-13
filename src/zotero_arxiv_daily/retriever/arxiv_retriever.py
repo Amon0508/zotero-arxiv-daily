@@ -209,8 +209,11 @@ def _entry_to_arxiv_result(entry: Any) -> ArxivResult:
 
 @register_retriever("arxiv")
 class ArxivRetriever(BaseRetriever):
+    processing_delay = 0  # Conversion reads only already-fetched RSS metadata.
+
     def __init__(self, config):
         super().__init__(config)
+        self._raw_by_url: dict[str, ArxivResult] = {}
         if self.config.source.arxiv.category is None:
             raise ValueError("category must be specified for arxiv.")
 
@@ -282,11 +285,7 @@ class ArxivRetriever(BaseRetriever):
         authors = [a.name for a in raw_paper.authors]
         abstract = raw_paper.summary
         pdf_url = raw_paper.pdf_url
-        full_text = extract_text_from_tar(raw_paper)
-        if full_text is None:
-            full_text = extract_text_from_html(raw_paper)
-        if full_text is None:
-            full_text = extract_text_from_pdf(raw_paper)
+        self._raw_by_url[raw_paper.entry_id] = raw_paper
         return Paper(
             source=self.name,
             title=title,
@@ -294,8 +293,18 @@ class ArxivRetriever(BaseRetriever):
             abstract=abstract,
             url=raw_paper.entry_id,
             pdf_url=pdf_url,
-            full_text=full_text,
         )
+
+    def populate_full_text(self, paper: Paper) -> None:
+        """Download full text only for a paper selected for the email."""
+        raw_paper = self._raw_by_url.get(paper.url)
+        if raw_paper is None or paper.full_text is not None:
+            return
+        paper.full_text = extract_text_from_tar(raw_paper)
+        if paper.full_text is None:
+            paper.full_text = extract_text_from_html(raw_paper)
+        if paper.full_text is None:
+            paper.full_text = extract_text_from_pdf(raw_paper)
 
 
 def extract_text_from_html(paper: ArxivResult) -> str | None:

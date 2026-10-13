@@ -8,6 +8,7 @@ import random
 from datetime import datetime
 from .reranker import get_reranker_cls
 from .construct_email import render_email
+from .priority import prioritize_papers
 from .utils import send_email
 from openai import OpenAI
 from tqdm import tqdm
@@ -110,9 +111,13 @@ class Executor:
         if len(all_papers) > 0:
             logger.info("Reranking papers...")
             reranked_papers = self.reranker.rerank(all_papers, corpus)
+            reranked_papers = prioritize_papers(reranked_papers, self.config.executor.priority)
             reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
             logger.info("Generating TLDR and affiliations...")
             for p in tqdm(reranked_papers):
+                retriever = self.retrievers.get(p.source)
+                if retriever is not None and hasattr(retriever, "populate_full_text"):
+                    retriever.populate_full_text(p)
                 p.generate_tldr(self.openai_client, self.config.llm)
                 p.generate_affiliations(self.openai_client, self.config.llm)
         elif not self.config.executor.send_empty:

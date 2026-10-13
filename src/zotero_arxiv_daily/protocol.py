@@ -48,6 +48,8 @@ class Paper:
     tldr: Optional[str] = None
     affiliations: Optional[list[str]] = None
     score: Optional[float] = None
+    priority_signals: Optional[list[str]] = None
+    tldr_failed: bool = False
 
     def _generate_tldr_with_llm(self, openai_client:OpenAI,llm_params:dict) -> str:
         lang = llm_params.get('language', 'English')
@@ -87,12 +89,20 @@ class Paper:
     def generate_tldr(self, openai_client:OpenAI,llm_params:dict) -> str:
         try:
             tldr = self._generate_tldr_with_llm(openai_client,llm_params)
+            if not tldr or not tldr.strip():
+                raise ValueError("LLM returned an empty summary")
             self.tldr = tldr
+            self.tldr_failed = False
             return tldr
         except Exception as e:
             logger.warning(f"Failed to generate tldr of {self.url}: {e}")
-            tldr = self.abstract
+            lang = llm_params.get("language", "English")
+            if "中文" in lang or "chinese" in lang.casefold():
+                tldr = f"中文摘要生成失败；以下为英文原摘要：{self.abstract}"
+            else:
+                tldr = self.abstract
             self.tldr = tldr
+            self.tldr_failed = True
             return tldr
 
     def _generate_affiliations_with_llm(self, openai_client:OpenAI,llm_params:dict) -> Optional[list[str]]:
@@ -123,6 +133,8 @@ class Paper:
             return affiliations
     
     def generate_affiliations(self, openai_client:OpenAI,llm_params:dict) -> Optional[list[str]]:
+        if self.affiliations:
+            return self.affiliations
         try:
             affiliations = self._generate_affiliations_with_llm(openai_client,llm_params)
             self.affiliations = affiliations

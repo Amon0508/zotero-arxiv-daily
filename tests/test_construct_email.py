@@ -12,6 +12,13 @@ def test_render_email_with_papers():
     assert "MIT" in html
 
 
+def test_render_email_shows_failed_chinese_summary():
+    paper = make_sample_paper(tldr="中文摘要生成失败；以下为英文原摘要：Abstract.", tldr_failed=True)
+    html = render_email([paper])
+    assert "请检查 LLM API 余额与配置" in html
+    assert "中文摘要生成失败" in html
+
+
 def test_render_email_empty_list():
     html = render_email([])
     assert "No Papers Today" in html
