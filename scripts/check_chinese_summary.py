@@ -20,7 +20,11 @@ paper = Paper(
     source="arxiv",
     title="Generalization Dynamics of LM Pre-training",
     authors=[],
-    abstract="This paper studies how language models generalize during pre-training.",
+    abstract=(
+        "Language models can abruptly switch between memorized patterns and "
+        "generalizable reasoning throughout pre-training. The paper studies "
+        "this mode-hopping and uses it to select checkpoints and training data."
+    ),
     url="https://arxiv.org/abs/2609.33150",
 )
 client = OpenAI(api_key=llm["api"]["key"], base_url=llm["api"]["base_url"])

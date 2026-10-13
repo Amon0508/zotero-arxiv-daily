@@ -168,7 +168,7 @@ That's all! Now you can test the workflow by manually triggering it:
 ![test](./assets/test.png)
 
 > [!NOTE]
-> The Test-Workflow Action is the debug version of the main workflow (Send-emails-daily), which always retrieve 5 arxiv papers regardless of the date. While the main workflow will be automatically triggered everyday and retrieve new papers released yesterday. There is no new arxiv paper at weekends and holiday, in which case you may see "No new papers found" in the log of main workflow.
+> The Test workflow is the debug version of Send emails daily. It limits how many current-feed papers are processed, but the feed can be empty; a green run with zero papers does not test LLM summaries or send email. To test the configured LLM even when the feed is empty, manually run **Check Chinese summary** in GitHub Actions. It requests one Chinese TL;DR and fails if the API rejects the request or does not return Chinese text.
 
 Then check the log and the receiver email after it finishes.
 
